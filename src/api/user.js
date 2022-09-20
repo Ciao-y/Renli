@@ -7,8 +7,18 @@ export function login(data) {
     data
   })
 }
-export function getInfo(token) {
-
+// 获取用户资料的接口
+export function getUserInfo() {
+  return request({
+    url: '/sys/profile',
+    method: 'POST'
+  })
+}
+// 根据用户Id获取用户详情
+export function getUserDetailById(id) {
+  return request({
+    url: `/sys/user/${id}`
+  })
 }
 export function logout() {
 
