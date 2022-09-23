@@ -2,6 +2,8 @@
   <div class="dashboard-container">
     <div class="dashboard-text">name: {{ name }}
       <qrcode-vue :value="value" :size="size" level="H" />
+      <ImageUpload />
+      <UploadExcel />
     </div>
   </div>
 </template>
@@ -28,7 +30,7 @@ export default {
 }
 </script>
 
-<style lang="scss" scoped>
+<style lang="scss" >
 .dashboard {
   &-container {
     margin: 30px;

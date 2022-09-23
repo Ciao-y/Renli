@@ -7,8 +7,9 @@
         <template v-slot:after>
           <!-- 右侧显示按钮 -->
           <span slot="before">
-            <el-button size="small" type="success">excel导入</el-button>
-            <el-button size="small" type="danger">excel导出</el-button>
+            <el-button size="small" type="success" @click="$router.push('/import')">excel导入</el-button>
+            <el-button size="small" type="warning" @click="exportData">excel导出</el-button>
+            <el-button size="small" type="danger" @click="FData">excel导出复杂表单</el-button>
             <el-button size="small" type="primary" @click="showDialog=true">新增员工</el-button>
           </span>
         </template>
@@ -40,11 +41,11 @@
           </el-table-column>
           <el-table-column label="操作" sortable="" fixed="right" width="280">
             <template slot-scope="{row}">
-              <el-button type="text" size="small">查看</el-button>
+              <el-button type="text" size="small" @click="$router.push(`/employess/detail/${row.id}`)">查看</el-button>
               <el-button type="text" size="small">转正</el-button>
               <el-button type="text" size="small">调岗</el-button>
               <el-button type="text" size="small">离职</el-button>
-              <el-button type="text" size="small">角色</el-button>
+              <el-button type="text" size="small" @click="editRole(row.id)">角色</el-button>
               <el-button type="text" size="small" @click="delEmployee(row.id)">删除</el-button>
             </template>
           </el-table-column>
@@ -63,21 +64,26 @@
     </div>
     <!-- 放置弹层组件 -->
     <addEmployeeVue :show-dialog.sync="showDialog" />
-    <el-dialog title="显示二维码" :visible.sync="iSshow">
-      <qrcode-vue :value="staffPhotoUrl" size="100" level="H" />
+    <el-dialog title="二维码" :visible.sync="iSshow">
+      <qrcode-vue :value="staffPhotoUrl" size="100" level="H" type="flex" justify="center" align="middle" />
     </el-dialog>
+    <!-- 分配组件 -->
+    <Assignrole ref="assrow" :shou-role-dialog.sync="shouRoleDialog" :user-id="userId" />
   </div>
 </template>
 
 <script>
 import QrcodeVue from 'qrcode.vue'
+import { formatDate } from '@/filters'
 import { getEmployeeList, delEmployee } from '@/api/employees'
 import addEmployeeVue from './components/add-employee.vue'
 import EmployeeEnum from '@/api/constant/employees' // 引入员工的枚举对象
+import Assignrole from './components/assign-role.vue'
 export default {
   components: {
     addEmployeeVue,
-    QrcodeVue
+    QrcodeVue,
+    Assignrole
   },
   data() {
     return {
@@ -90,7 +96,9 @@ export default {
       loading: false, // 显示遮罩层
       showDialog: false, // 默认关闭
       iSshow: false, // 二维码的显示隐藏
-      staffPhotoUrl: undefined
+      staffPhotoUrl: undefined,
+      shouRoleDialog: false, // 分配组件的显示隐藏
+      userId: null
 
     }
   },
@@ -104,7 +112,7 @@ export default {
       const { total, rows } = await getEmployeeList(this.page)
       this.page.total = total
       this.list = rows
-      console.log(this.list)
+      // console.log(this.list)
       this.loading = false
     },
     // newPage是最新的页码
@@ -123,8 +131,11 @@ export default {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
         type: 'warning'
-      }).then(action => {
-        delEmployee(id)
+      }).then(async action => {
+        if (this.list.length === 1) {
+          this.page.page -= 1
+        }
+        await delEmployee(id)
         this.getEmployeeList()
         this.$message.success('删除员工成功')
       })
@@ -133,9 +144,82 @@ export default {
     onShow(url) {
       this.staffPhotoUrl = url
       this.iSshow = true
+    },
+    // 导出简单表单列表
+    exportData() {
+      const headers = {
+        '姓名': 'username',
+        '手机号': 'mobile',
+        '入职日期': 'timeOfEntry',
+        '聘用形式': 'formOfEmployment',
+        '转正日期': 'correctionTime',
+        '工号': 'workNumber',
+        '部门': 'departmentName'
+      }
+      import('@/vendor/Export2Excel').then(async excel => {
+        const { rows } = await getEmployeeList({ page: 1, size: this.page.total })
+        const data = this.formatJson(headers, rows)
+        excel.export_json_to_excel({
+          header: Object.keys(headers),
+          data,
+          filename: '员工信息表',
+          autoWidth: true,
+          bookType: 'xlsx'
+        })
+      })
+    },
+    // 导出复杂表单
+    FData() {
+      const headers = {
+        '姓名': 'username',
+        '手机号': 'mobile',
+        '入职日期': 'timeOfEntry',
+        '聘用形式': 'formOfEmployment',
+        '转正日期': 'correctionTime',
+        '工号': 'workNumber',
+        '部门': 'departmentName'
+      }
+      import('@/vendor/Export2Excel').then(async excel => {
+        const { rows } = await getEmployeeList({ page: 1, size: this.page.total })
+        const data = this.formatJson(headers, rows)
+        const multiHeader = [['姓名', '主要信息', '', '', '', '', '部门']]
+        const merges = ['A1:A2', 'B1:F1', 'G1:G2']
+        excel.export_json_to_excel({
+          header: Object.keys(headers),
+          data,
+          filename: '员工信息表',
+          autoWidth: true,
+          bookType: 'xlsx',
+          multiHeader,
+          merges
+        })
+      })
+    },
+    // 该方法负责将数组转化成二维数组
+    formatJson(headers, rows) {
+      // 首先遍历数组
+      // [{ username: '张三'},{},{}]  => [[’张三'],[],[]]
+      return rows.map(item => {
+        return Object.keys(headers).map(key => {
+          if (headers[key] === 'timeOfEntry' || headers[key] === 'correctionTime') {
+            return formatDate(item[headers[key]]) // 返回格式化之前的时间
+          } else if (headers[key] === 'formOfEmployment') {
+            var en = EmployeeEnum.hireType.find(obj => obj.id === item[headers[key]])
+            return en ? en.value : '未知'
+          }
+          return item[headers[key]]
+        })
+      })
+    },
+    // 分配权限的弹层
+    async editRole(id) {
+      this.userId = id
+      await this.$refs.assrow.getUserDetailById(id)
+      this.shouRoleDialog = true
     }
   }
 }
+
 </script>
 
  <style>
