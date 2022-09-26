@@ -128,8 +128,8 @@ export default {
   }
 }
 </script>
-<style scoped>
-.disabled /deep/.el-upload--picture-card {
+<style scoped lang="scss">
+::v-deep.disabled .el-upload--picture-card {
   display: none
 }
 

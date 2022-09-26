@@ -20,7 +20,7 @@
               <el-table-column label="操作" align="center">
                 作用域插槽 获取当前行的数据
                 <template slot-scope="{row}">
-                  <el-button size="small" type="success">分配权限</el-button>
+                  <el-button size="small" type="success" @click="distributor(row.id)">分配权限</el-button>
                   <el-button size="small" type="primary" @click="editRole(row.id)">编辑</el-button>
                   <el-button size="small" type="danger" @click="deleteRole(row.id)">删除</el-button>
                 </template>
@@ -94,23 +94,54 @@
         </el-col>
       </el-row>
     </el-dialog>
+    <!-- 新增权限的弹层 -->
+    <el-dialog title="分配权限" :visible="showPerm" @close="cancel">
+      <!-- :show-checkbox="true" 如果为true 表示父子勾选时 不互相关联 默认不写为false -->
+      <el-tree
+        ref="premTree"
+        node-key="id"
+        :data="permDate"
+        :props="defauItProps"
+        :default-expand-all="true"
+        :show-checkbox="true"
+        :check-strictly="true"
+        :default-checked-keys="selectCcheck"
+      />
+      <!-- 确定,取消 -->
+      <el-row slot="footer" type="flex" justify="center">
+        <el-col :span="6">
+          <el-button size="small" type="primary" @click="determinate">确定</el-button>
+          <el-button @click="cancel">取消</el-button>
+        </el-col>
+      </el-row>
+    </el-dialog>
   </div>
 </template>
 
 <script>
 import { mapGetters } from 'vuex'
-import { getRoleList, getCompanyInfo, deleteRole, getRoleDetail, updateRole, addRole } from '@/api/setting'
+import { getRoleList, getCompanyInfo, assignPerm, deleteRole, getRoleDetail, updateRole, addRole } from '@/api/setting'
+import { getPermissionList } from '@/api/permisson'
+import { transListToTreeData } from '@/utils'
+
 export default {
   data() {
     return {
       list: [], // 承接数组
       FormData: {}, // 公司信息
+      permDate: [], // 接收权限数据信息
+      defauItProps: {
+        label: 'name'
+      }, // 定义显示 字段的名称和子属性的字段
+      roleId: null, // 记录当前分配权限的id
+      selectCcheck: [], // 记录当前权限点的标识
       page: {
         // 放置页码及相关数据
         page: 1,
         pagesize: 10,
         total: 0 // 记录总数
       },
+      showPerm: false, // 分配权限的弹层显示
       showDialog: false, // 控制弹层显示
       roleForm: {
         name: '', // 角色名称
@@ -150,16 +181,6 @@ export default {
     },
     // 删除角色
     async deleteRole(id) {
-      //  提示
-      // try {
-      //   await this.$confirm('确认删除该角色吗')
-      //   // 只有点击了确定 才能进入到下方
-      //   await deleteRole(id) // 调用删除接口
-      //   this.getRoleList() // 重新加载数据
-      //   this.$message.success('删除角色成功')
-      // } catch (error) {
-      //   console.log(error)
-      // }
       this.$confirm('确认删除?', '提示', {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
@@ -181,17 +202,7 @@ export default {
       this.showDialog = true
       // console.log(this.roleForm)
     },
-    // btnOK() {
-    //   this.$refs.roleForm.validate(async valid => {
-    //     if (!valid) return
-    //     if (this.roleForm.id) {
-    //       await updateRole(this.roleForm)
-    //     } else {
-    //       // 新增
-    //       await getRoleDetail(this.roleForm)
-    //     }
-    //   })
-    // }
+
     // 确认
     async btnOK() {
       try {
@@ -216,8 +227,35 @@ export default {
         name: '',
         description: ''
       }
-      this.$refs.roleForm.resetFitelds()
+      this.$refs.roleForm.resetFields()
       this.showDialog = false
+    },
+    // 获取权限数据回流
+    async distributor(id) {
+      this.permDate = transListToTreeData(await getPermissionList(), '0')
+      this.roleId = id
+      // permIds是当前用户所拥有权限点数据
+      const { permIds } = await getRoleDetail(id)
+      // console.log(permIds)
+      this.selectCcheck = permIds
+      this.showPerm = true
+    },
+    // 添加权限
+    determinate() {
+      this.$confirm('确认给该用户添加权限?', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(action => {
+        assignPerm({ permIds: this.$refs.premTree.getCheckedKeys(), id: this.roleId })
+        this.$message.success('添加成功')
+        this.showPerm = false
+      })
+    },
+    // 关闭弹层
+    cancel() {
+      this.selectCcheck = []
+      this.showPerm = false
     }
   }
 }

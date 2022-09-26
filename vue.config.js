@@ -7,7 +7,30 @@ function resolve(dir) {
 }
 
 const name = defaultSettings.title || 'vue Admin Template' // page title
-
+let cdn = { css: [], js: [] }
+// 通过环境变量 来区分是否使用cdn
+const isProd = process.env.NODE_ENV === 'production' // 判断是否是生产环境
+let externals = {}
+if (isProd) {
+  // 如果是生产环境 就排除打包 否则不排除
+  externals = {
+    // key(包名) / value(这个值 是 需要在CDN中获取js, 相当于 获取的js中 的该包的全局的对象的名字)
+    'vue': 'Vue', // 后面的名字不能随便起 应该是 js中的全局对象名
+    'element-ui': 'ELEMENT', // 都是js中全局定义的
+    'xlsx': 'XLSX' // 都是js中全局定义的
+  }
+  cdn = {
+    css: [
+      'https://unpkg.com/element-ui/lib/theme-chalk/index.css' // 提前引入elementUI样式
+    ], // 放置css文件目录
+    js: [
+      'https://cdn.jsdelivr.net/npm/vue', // vuejs
+      'https://unpkg.com/element-ui/lib/index.js', // element
+      'https://cdn.jsdelivr.net/npm/xlsx@0.16.6/dist/xlsx.full.min.js', // xlsx 相关
+      'https://cdn.jsdelivr.net/npm/xlsx@0.16.6/dist/jszip.min.js' // xlsx 相关
+    ] // 放置js文件目录
+  }
+}
 // If your port is set to 80,
 // use administrator privileges to execute the command line.
 // For example, Mac: sudo npm run
@@ -53,7 +76,8 @@ module.exports = {
       alias: {
         '@': resolve('src')
       }
-    }
+    },
+    externals: externals
   },
   chainWebpack(config) {
     // it can improve the speed of the first screen, it is recommended to turn on preload
@@ -66,7 +90,11 @@ module.exports = {
         include: 'initial'
       }
     ])
-
+    // 注入cdn变量
+    config.plugin('html').tap(args => {
+      args[0].cdn = cdn
+      return args
+    })
     // when there are many pages, it will cause too many meaningless requests
     config.plugins.delete('prefetch')
 
